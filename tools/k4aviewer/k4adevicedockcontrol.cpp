@@ -895,7 +895,10 @@ bool K4ADeviceDockControl::StartCameras()
 
     try
     {
+        GLFWwindow* curWindow = glfwGetCurrentContext();
+        glfwMakeContextCurrent(nullptr);
         m_device.start_cameras(&deviceConfig);
+        glfwMakeContextCurrent(curWindow);    
     }
     catch (const k4a::error &)
     {
