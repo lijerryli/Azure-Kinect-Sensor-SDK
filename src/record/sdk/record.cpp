@@ -232,7 +232,9 @@ k4a_result_t k4a_record_create(const char *path,
             add_tag(context, "K4A_IR_TRACK", track_uid_str.str().c_str(), TAG_TARGET_TYPE_TRACK, track_uid);
             add_tag(context,
                     "K4A_IR_MODE",
-                    device_config.depth_mode == K4A_DEPTH_MODE_PASSIVE_IR ? "PASSIVE" : "ACTIVE",
+                    device_config.record_raw_depth ?
+                        "RAW" :
+                        (device_config.depth_mode == K4A_DEPTH_MODE_PASSIVE_IR ? "PASSIVE" : "ACTIVE"),
                     TAG_TARGET_TYPE_TRACK,
                     track_uid);
         }

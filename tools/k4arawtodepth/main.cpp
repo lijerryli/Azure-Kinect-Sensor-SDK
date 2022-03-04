@@ -109,7 +109,25 @@ int main(int argc, char **argv)
     k4a::image raw_img;
     k4a_record_configuration_t input_config = input.get_record_configuration();
     std::vector<uint8_t> ccb;
-    input.get_attachment("depth_cal.ccb", &ccb);
+
+    if (!input.get_attachment("depth_cal.ccb", &ccb))
+    {
+        std::cout << "No Depth Calibration Found" << std::endl;
+        return 1;
+    }
+
+    std::string ir_tag;
+    if (!input.get_tag("K4A_IR_MODE", &ir_tag))
+    {
+        std::cout << "K4A_IR_MODE Tag Not Found" << std::endl;
+        return 1;
+    }
+
+    if (ir_tag.compare("RAW") != 0)
+    {
+        std::cout << "K4A_IR_MODE Tag <" << ir_tag << "> does not match <RAW>" << std::endl;
+        return 1;
+    }
 
     k4a::record recorder;
     k4a_depth_engine_context_t *de_context_ptr = nullptr;
