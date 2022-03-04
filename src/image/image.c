@@ -129,6 +129,7 @@ static k4a_result_t image_create_empty_image(allocation_source_t source, size_t 
 
     if (K4A_SUCCEEDED(result))
     {
+        image->format = K4A_IMAGE_FORMAT_CUSTOM;
         image->ref_count = 1;
         image->buffer_size = size;
         image->memory_free_cb = image_default_free_function;

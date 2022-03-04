@@ -125,6 +125,7 @@ int main(int argc, char **argv)
     int absoluteExposureValue = defaultExposureAuto;
     int gain = defaultGainAuto;
     char *recording_filename;
+    bool recording_raw_depth = false;
 
     CmdParser::OptionParser cmd_parser;
     cmd_parser.RegisterOption("-h|--help", "Prints this help", [&]() {
@@ -357,6 +358,25 @@ int main(int argc, char **argv)
                                   }
                                   gain = gainSetting;
                               });
+    cmd_parser.RegisterOption("--raw-depth",
+                              "Record SigmaStar Raw frames from the depth sensor (ON, OFF, default: OFF)\n",
+                              1,
+                              [&](const std::vector<char *> &args) {
+                                  if (string_compare(args[0], "on") == 0)
+                                  {
+                                      recording_raw_depth = true;
+                                  }
+                                  else if (string_compare(args[0], "off") == 0)
+                                  {
+                                      recording_raw_depth = false;
+                                  }
+                                  else
+                                  {
+                                      std::ostringstream str;
+                                      str << "Unknown raw depth mode specified: " << args[0];
+                                      throw std::runtime_error(str.str());
+                                  }
+                              });
 
     int args_left = 0;
     try
@@ -426,6 +446,7 @@ int main(int argc, char **argv)
     device_config.wired_sync_mode = wired_sync_mode;
     device_config.depth_delay_off_color_usec = depth_delay_off_color_usec;
     device_config.subordinate_delay_off_master_usec = subordinate_delay_off_master_usec;
+    device_config.record_raw_depth = recording_raw_depth;
 
     return do_recording((uint8_t)device_index,
                         recording_filename,

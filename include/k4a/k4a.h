@@ -1382,6 +1382,44 @@ K4A_EXPORT k4a_buffer_result_t k4a_device_get_serialnum(k4a_device_t device_hand
                                                         char *serial_number,
                                                         size_t *serial_number_size);
 
+/** Get the Azure Kinect depth calibration (also known as the CCB).
+ *
+ * \param device_handle
+ * Handle obtained by k4a_device_open().
+ *
+ * \param calibration_buf
+ * Location to write the depth calibration to. If the functions returns ::K4A_BUFFER_RESULT_SUCCEEDED, this buffer will
+ * be filled with the depth calibration data. If this input is NULL \p calibration_size will still be updated the return
+ * the size of the buffer needed to store the depth calibration data.
+ *
+ * \param calibration_size
+ * On input, the size of the \p calibration_buf buffer if that pointer is not NULL. On output, this value is set to the
+ * actual number of bytes in the depth calibration.
+ *
+ * \returns
+ * A return of ::K4A_BUFFER_RESULT_SUCCEEDED means that the \p calibration_buf has been filled in. If the buffer is too
+ * small the function returns ::K4A_BUFFER_RESULT_TOO_SMALL and the size of the serial number is
+ * returned in the \p calibration_size parameter. All other failures return ::K4A_BUFFER_RESULT_FAILED.
+ *
+ * \relates k4a_device_t
+ *
+ * \remarks
+ * Returns the depth calibration required for processing the raw frame to depth. If the caller needs to know the size of
+ * the depth calibration buffer to allocate memory, the function should be called once with a NULL \p calibration_buf to
+ * get the needed size in the \p calibration_buf output, and then again with the allocated buffer.
+ *
+ * \xmlonly
+ * <requirements>
+ *   <requirement name="Header">k4a.h (include k4a/k4a.h)</requirement>
+ *   <requirement name="Library">k4a.lib</requirement>
+ *   <requirement name="DLL">k4a.dll</requirement>
+ * </requirements>
+ * \endxmlonly
+ */
+K4A_EXPORT k4a_buffer_result_t k4a_device_get_depth_calibration(k4a_device_t device_handle,
+                                                                uint8_t *calibration_buf,
+                                                                size_t *calibration_size);
+
 /** Get the version numbers of the device's subsystems.
  *
  * \param device_handle

@@ -875,6 +875,7 @@ k4a_result_t k4a_device_start_cameras(k4a_device_t device_handle, const k4a_devi
         LOG_INFO("    wired_sync_mode:%d", config->wired_sync_mode);
         LOG_INFO("    subordinate_delay_off_master_usec:%d", config->subordinate_delay_off_master_usec);
         LOG_INFO("    disable_streaming_indicator:%d", config->disable_streaming_indicator);
+        LOG_INFO("    record_raw_depth:%d", config->record_raw_depth);
         result = TRACE_CALL(validate_configuration(device, config));
     }
 
@@ -960,6 +961,16 @@ k4a_buffer_result_t k4a_device_get_serialnum(k4a_device_t device_handle,
     k4a_context_t *device = k4a_device_t_get_context(device_handle);
 
     return TRACE_BUFFER_CALL(depth_get_device_serialnum(device->depth, serial_number, serial_number_size));
+}
+
+k4a_buffer_result_t k4a_device_get_depth_calibration(k4a_device_t device_handle,
+                                                     uint8_t *calibration_buf,
+                                                     size_t *calibration_size)
+{
+    RETURN_VALUE_IF_HANDLE_INVALID(K4A_BUFFER_RESULT_FAILED, k4a_device_t, device_handle);
+    k4a_context_t *device = k4a_device_t_get_context(device_handle);
+
+    return TRACE_BUFFER_CALL(depth_get_calibration(device->depth, calibration_buf, calibration_size));
 }
 
 k4a_result_t k4a_device_get_version(k4a_device_t device_handle, k4a_hardware_version_t *version)

@@ -983,6 +983,11 @@ typedef struct _k4a_device_configuration_t
      *
      * This setting disables that behavior and keeps the LED in an off state. */
     bool disable_streaming_indicator;
+
+    /**
+     * Configure depth sensor to return depth/IR frames or raw frames
+     */
+    bool record_raw_depth;
 } k4a_device_configuration_t;
 
 /** Extrinsic calibration data.

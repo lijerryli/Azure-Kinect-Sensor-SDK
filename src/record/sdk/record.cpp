@@ -631,13 +631,16 @@ k4a_result_t k4a_record_write_capture(const k4a_record_t recording_handle, k4a_c
             if (image_buffer != NULL && buffer_size > 0)
             {
                 k4a_image_format_t image_format = k4a_image_get_format(images[i]);
-                if (image_format == expected_formats[i])
+
+                if (image_format == expected_formats[i] ||
+                    (image_format == K4A_IMAGE_FORMAT_CUSTOM && context->device_config.record_raw_depth))
                 {
                     // Create a copy of the image buffer for writing to file.
                     assert(buffer_size <= UINT32_MAX);
                     DataBuffer *data_buffer = new (std::nothrow)
                         DataBuffer(image_buffer, (uint32)buffer_size, NULL, true);
-                    if (image_format == K4A_IMAGE_FORMAT_DEPTH16 || image_format == K4A_IMAGE_FORMAT_IR16)
+                    if (image_format == K4A_IMAGE_FORMAT_DEPTH16 || image_format == K4A_IMAGE_FORMAT_IR16 ||
+                        (image_format == K4A_IMAGE_FORMAT_CUSTOM && context->device_config.record_raw_depth))
                     {
                         // 16 bit grayscale needs to be converted to big-endian in the file.
                         assert(data_buffer->Size() % sizeof(uint16_t) == 0);
@@ -661,7 +664,7 @@ k4a_result_t k4a_record_write_capture(const k4a_record_t recording_handle, k4a_c
                 }
                 else
                 {
-                    LOG_ERROR("Tried to write capture with unexpected image format.", 0);
+                    LOG_ERROR("Tried to write capture with unexpected image format %d.", (int)image_format);
                     result = K4A_RESULT_FAILED;
                 }
             }

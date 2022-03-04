@@ -7,6 +7,7 @@
 #include <atomic>
 #include <iostream>
 #include <algorithm>
+#include <vector>
 
 #include <k4a/k4a.h>
 #include <k4arecord/record.h>
@@ -144,6 +145,27 @@ int do_recording(uint8_t device_index,
     if (record_imu)
     {
         CHECK(k4a_record_add_imu_track(recording), device);
+    }
+
+    if (device_config->record_raw_depth)
+    {
+        size_t depth_calibration_size = 0;
+        k4a_buffer_result_t buffer_result = k4a_device_get_depth_calibration(device, NULL, &depth_calibration_size);
+        if (buffer_result == K4A_BUFFER_RESULT_TOO_SMALL)
+        {
+            std::vector<uint8_t> depth_calibration_buffer = std::vector<uint8_t>(depth_calibration_size);
+            buffer_result = k4a_device_get_depth_calibration(device,
+                                                             depth_calibration_buffer.data(),
+                                                             &depth_calibration_size);
+            if (buffer_result == K4A_BUFFER_RESULT_SUCCEEDED)
+            {
+                CHECK(k4a_record_add_attachment(recording,
+                                                "depth_cal.ccb",
+                                                depth_calibration_buffer.data(),
+                                                depth_calibration_size),
+                      device);
+            }
+        }
     }
     CHECK(k4a_record_write_header(recording), device);
 

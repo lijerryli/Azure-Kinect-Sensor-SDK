@@ -31,6 +31,21 @@ static k4a_version_t g_suggested_fw_version_depth = { 1, 6, 79 };          // 1.
 static k4a_version_t g_suggested_fw_version_audio = { 1, 6, 14 };          // 1.6.14
 static k4a_version_t g_suggested_fw_version_depth_config = { 6109, 7, 0 }; // 6109.7 (iteration is not used, set to 0)
 
+/*
+ * Frame Footer structure for the frame returned by the depth sensor.
+ */
+typedef struct InputFrameFooter_t
+{
+    unsigned int Signature;
+    unsigned short BlockSize;
+    unsigned short BlockVer;
+    unsigned long long TimeStamp;
+    float SensorTemp;
+    float ModuleTemp;
+    unsigned long long USBSoFSeqNum;
+    unsigned long long USBSoFPTS;
+} InputFrameFooter;
+
 typedef struct _depth_context_t
 {
     depthmcu_t depthmcu;
@@ -41,6 +56,7 @@ typedef struct _depth_context_t
     bool calibration_init;
 
     bool running;
+    bool record_raw_depth;
     k4a_hardware_version_t version;
     k4a_calibration_camera_t calibration;
 
@@ -108,6 +124,7 @@ k4a_result_t depth_create(depthmcu_t depthmcu,
     depth->depthmcu = depthmcu;
     depth->capture_ready_cb = capture_ready;
     depth->capture_ready_cb_context = capture_ready_context;
+    depth->record_raw_depth = false;
 
     if (K4A_SUCCEEDED(result))
     {
@@ -278,7 +295,22 @@ void depth_capture_available(k4a_result_t cb_result, k4a_image_t image_raw, void
         capture_set_ir_image(capture_raw, image_raw);
     }
 
-    dewrapper_post_capture(cb_result, capture_raw, depth->dewrapper);
+    if (depth->record_raw_depth)
+    {
+        // set the image timestamp based off the frame footer data
+        InputFrameFooter *footer = (InputFrameFooter *)(image_get_buffer(image_raw) + image_get_size(image_raw) -
+                                                        sizeof(InputFrameFooter));
+        image_set_device_timestamp_usec(image_raw, K4A_90K_HZ_TICK_TO_USEC(footer->TimeStamp));
+
+        if (depth->capture_ready_cb)
+        {
+            depth->capture_ready_cb(cb_result, capture_raw, depth->capture_ready_cb_context);
+        }
+    }
+    else
+    {
+        dewrapper_post_capture(cb_result, capture_raw, depth->dewrapper);
+    }
 
     if (capture_raw)
     {
@@ -294,6 +326,28 @@ k4a_buffer_result_t depth_get_device_serialnum(depth_t depth_handle, char *seria
     depth_context_t *depth = depth_t_get_context(depth_handle);
 
     return TRACE_BUFFER_CALL(depthmcu_get_serialnum(depth->depthmcu, serial_number, serial_number_size));
+}
+
+k4a_buffer_result_t depth_get_calibration(depth_t depth_handle, uint8_t *calibration_buf, size_t *calibration_size)
+{
+    RETURN_VALUE_IF_HANDLE_INVALID(K4A_BUFFER_RESULT_FAILED, depth_t, depth_handle);
+    RETURN_VALUE_IF_ARG(K4A_BUFFER_RESULT_FAILED, calibration_size == NULL);
+
+    depth_context_t *depth = depth_t_get_context(depth_handle);
+    size_t caller_buffer_size = *calibration_size;
+
+    RETURN_VALUE_IF_ARG(K4A_BUFFER_RESULT_FAILED, depth->calibration_init == false);
+
+    *calibration_size = depth->calibration_memory_size;
+    if (caller_buffer_size < depth->calibration_memory_size || calibration_buf == NULL)
+    {
+        return K4A_BUFFER_RESULT_TOO_SMALL;
+    }
+    if (calibration_buf != NULL)
+    {
+        memcpy(calibration_buf, depth->calibration_memory, depth->calibration_memory_size);
+    }
+    return K4A_BUFFER_RESULT_SUCCEEDED;
 }
 
 k4a_result_t depth_get_device_version(depth_t depth_handle, k4a_hardware_version_t *version)
@@ -374,6 +428,7 @@ k4a_result_t depth_start(depth_t depth_handle, const k4a_device_configuration_t 
     if (K4A_SUCCEEDED(result))
     {
         depth->running = true; // set to true once we know we need to call depth_stop to unwind
+        depth->record_raw_depth = config->record_raw_depth;
         result = TRACE_CALL(depthmcu_depth_set_capture_mode(depth->depthmcu, config->depth_mode));
     }
 

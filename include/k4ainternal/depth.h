@@ -105,6 +105,27 @@ void depth_destroy(depth_t depth_handle);
  */
 k4a_buffer_result_t depth_get_device_serialnum(depth_t depth_handle, char *serial_number, size_t *serial_number_size);
 
+/** Returns the Azure Kinect device calibration file (also known as the CCB).
+ *
+ * \param depth_handle [IN]
+ * The depth device handle.
+ *
+ * \param calibration_buf [IN]
+ * buffer to write the calibration file into
+ *
+ * \param calibration_size [IN OUT]
+ * [IN] the maximum size of the memory pointed to by /ref calibration_buf
+ * [OUT] When used with /ref calibration_buf set to NULL, this value will represent the minimum allocation size needed
+ * for this call to succeed.
+ *
+ * \return ::K4A_BUFFER_RESULT_SUCCEEDED if the calibration was successfully written into /ref calibration_buf.
+ * ::K4A_BUFFER_RESULT_TOO_SMALL if the size of /ref calibration_buf was too small, in this case /ref calibration_size
+ * will have been updated with the size needed. ::K4A_BUFFER_RESULT_FAILED if an error was encountered. device was
+ * opened, otherwise an error code
+ *
+ */
+k4a_buffer_result_t depth_get_calibration(depth_t depth_handle, uint8_t *calibration_buf, size_t *calibration_size);
+
 /** Returns the Azure Kinect device versions.
  *
  * \param depth_handle [IN]
