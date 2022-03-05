@@ -218,33 +218,51 @@ int main(int argc, char **argv)
                 combined_cap.set_color_image(input_capture.get_color_image());
             }
             int stride_bytes = (int)outputCaptureInfo.output_width * (int)sizeof(uint16_t);
-
-            k4a::image depth_img = k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_DEPTH16,
-                                                                  outputCaptureInfo.output_width,
-                                                                  outputCaptureInfo.output_height,
-                                                                  stride_bytes,
-                                                                  output_buf.data(),
-                                                                  (size_t)stride_bytes *
-                                                                      (size_t)outputCaptureInfo.output_height,
-                                                                  nullptr,
-                                                                  nullptr);
-
-            k4a::image ir_img =
-                k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_IR16,
-                                               outputCaptureInfo.output_width,
-                                               outputCaptureInfo.output_height,
-                                               stride_bytes,
-                                               output_buf.data() + stride_bytes * outputCaptureInfo.output_height,
-                                               (size_t)stride_bytes * (size_t)outputCaptureInfo.output_height,
-                                               nullptr,
-                                               nullptr);
-
             std::chrono::microseconds us(K4A_90K_HZ_TICK_TO_USEC(outputCaptureInfo.center_of_exposure_in_ticks));
-            depth_img.set_timestamp(us);
-            ir_img.set_timestamp(us);
 
-            combined_cap.set_depth_image(depth_img);
-            combined_cap.set_ir_image(ir_img);
+            if (input_config.depth_mode == K4A_DEPTH_MODE_PASSIVE_IR)
+            {
+                k4a::image ir_img = k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_IR16,
+                                                                   outputCaptureInfo.output_width,
+                                                                   outputCaptureInfo.output_height,
+                                                                   stride_bytes,
+                                                                   output_buf.data(),
+                                                                   (size_t)stride_bytes *
+                                                                       (size_t)outputCaptureInfo.output_height,
+                                                                   nullptr,
+                                                                   nullptr);
+
+                ir_img.set_timestamp(us);
+                combined_cap.set_ir_image(ir_img);
+            }
+            else
+            {
+                k4a::image depth_img = k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_DEPTH16,
+                                                                      outputCaptureInfo.output_width,
+                                                                      outputCaptureInfo.output_height,
+                                                                      stride_bytes,
+                                                                      output_buf.data(),
+                                                                      (size_t)stride_bytes *
+                                                                          (size_t)outputCaptureInfo.output_height,
+                                                                      nullptr,
+                                                                      nullptr);
+
+                k4a::image ir_img =
+                    k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_IR16,
+                                                   outputCaptureInfo.output_width,
+                                                   outputCaptureInfo.output_height,
+                                                   stride_bytes,
+                                                   output_buf.data() + stride_bytes * outputCaptureInfo.output_height,
+                                                   (size_t)stride_bytes * (size_t)outputCaptureInfo.output_height,
+                                                   nullptr,
+                                                   nullptr);
+
+                depth_img.set_timestamp(us);
+                ir_img.set_timestamp(us);
+
+                combined_cap.set_depth_image(depth_img);
+                combined_cap.set_ir_image(ir_img);
+            }
 
             recorder.write_capture(combined_cap);
         }

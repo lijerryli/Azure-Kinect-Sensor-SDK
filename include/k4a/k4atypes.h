@@ -1263,6 +1263,7 @@ static const k4a_device_configuration_t K4A_DEVICE_CONFIG_INIT_DISABLE_ALL = { K
                                                                                0,
                                                                                K4A_WIRED_SYNC_MODE_STANDALONE,
                                                                                0,
+                                                                               false,
                                                                                false };
 
 /**

@@ -291,6 +291,7 @@ k4a_device_configuration_t K4ADeviceConfiguration::ToK4ADeviceConfiguration() co
 
     deviceConfig.disable_streaming_indicator = DisableStreamingIndicator;
     deviceConfig.synchronized_images_only = SynchronizedImagesOnly;
+    deviceConfig.record_raw_depth = false; // k4aviewer cannot display raw frames
 
     return deviceConfig;
 }
