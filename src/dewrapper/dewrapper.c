@@ -54,6 +54,21 @@ typedef struct _shared_image_context_t
     volatile long ref;
 } shared_image_context_t;
 
+/*
+ * Frame Footer structure for the frame returned by the depth sensor.
+ */
+typedef struct InputFrameFooter_t
+{
+    unsigned int Signature;
+    unsigned short BlockSize;
+    unsigned short BlockVer;
+    unsigned long long TimeStamp;
+    float SensorTemp;
+    float ModuleTemp;
+    unsigned long long USBSoFSeqNum;
+    unsigned long long USBSoFPTS;
+} InputFrameFooter;
+
 K4A_DECLARE_CONTEXT(dewrapper_t, dewrapper_context_t);
 
 static k4a_depth_engine_mode_t get_de_mode_from_depth_mode(k4a_depth_mode_t mode)
@@ -176,6 +191,55 @@ static void depth_engine_stop_helper(dewrapper_context_t *dewrapper)
         deloader_depth_engine_destroy(&dewrapper->depth_engine);
         dewrapper->depth_engine = NULL;
     }
+}
+
+static int depth_engine_raw_thread(void *param)
+{
+    dewrapper_context_t *dewrapper = (dewrapper_context_t *)param;
+    k4a_result_t result = K4A_RESULT_SUCCEEDED;
+
+    // The Start routine is blocked waiting for this thread to complete startup, so we signal it here and share our
+    // startup status.
+    Lock(dewrapper->lock);
+    dewrapper->thread_started = true;
+    dewrapper->thread_start_result = result;
+    Condition_Post(dewrapper->condition);
+    Unlock(dewrapper->lock);
+
+    // NOTE: Failures after this point are reported to the user via the k4a_device_get_capture()
+
+    while (result != K4A_RESULT_FAILED && dewrapper->thread_stop == false)
+    {
+        k4a_capture_t capture_raw = NULL;
+        k4a_image_t image_raw = NULL;
+
+        k4a_wait_result_t wresult = queue_pop(dewrapper->queue, K4A_WAIT_INFINITE, &capture_raw);
+        if (wresult != K4A_WAIT_RESULT_SUCCEEDED)
+        {
+            result = K4A_RESULT_FAILED;
+        }
+
+        if (K4A_SUCCEEDED(result))
+        {
+            image_raw = capture_get_ir_image(capture_raw);
+            result = K4A_RESULT_FROM_BOOL(image_raw != NULL);
+        }
+
+        if (K4A_SUCCEEDED(result))
+        {
+            // set the image timestamp based off the frame footer data
+            InputFrameFooter *footer = (InputFrameFooter *)(image_get_buffer(image_raw) + image_get_size(image_raw) -
+                                                            sizeof(InputFrameFooter));
+            image_set_device_timestamp_usec(image_raw, K4A_90K_HZ_TICK_TO_USEC(footer->TimeStamp));
+
+            if (dewrapper->capture_ready_cb)
+            {
+                dewrapper->capture_ready_cb(result, capture_raw, dewrapper->capture_ready_cb_context);
+            }
+        }
+    }
+
+    return (int)result;
 }
 
 static int depth_engine_thread(void *param)
@@ -532,8 +596,16 @@ k4a_result_t dewrapper_start(dewrapper_t dewrapper_handle,
         dewrapper->thread_stop = false;
         dewrapper->thread_started = false;
 
-        THREADAPI_RESULT tresult = ThreadAPI_Create(&dewrapper->thread, depth_engine_thread, dewrapper);
-        result = K4A_RESULT_FROM_BOOL(tresult == THREADAPI_OK);
+        if (config->record_raw_depth)
+        {
+            THREADAPI_RESULT tresult = ThreadAPI_Create(&dewrapper->thread, depth_engine_raw_thread, dewrapper);
+            result = K4A_RESULT_FROM_BOOL(tresult == THREADAPI_OK);
+        }
+        else
+        {
+            THREADAPI_RESULT tresult = ThreadAPI_Create(&dewrapper->thread, depth_engine_thread, dewrapper);
+            result = K4A_RESULT_FROM_BOOL(tresult == THREADAPI_OK);
+        }
 
         if (K4A_SUCCEEDED(result))
         {
