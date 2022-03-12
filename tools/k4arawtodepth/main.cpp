@@ -106,7 +106,6 @@ int main(int argc, char **argv)
     }
 
     k4a::capture input_capture;
-    k4a::image raw_img;
     k4a_record_configuration_t input_config = input.get_record_configuration();
     std::vector<uint8_t> ccb;
 
@@ -173,6 +172,9 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    size_t output_size = deloader_depth_engine_get_output_frame_size(de_context_ptr);
+    std::vector<uint8_t> output_buf(output_size);
+
     // write the imu data
     k4a_imu_sample_t imu;
     while (input.get_next_imu_sample(&imu))
@@ -187,91 +189,93 @@ int main(int argc, char **argv)
     std::cout << "Processing Frame ";
     while (input.get_next_capture(&input_capture))
     {
-        std::cout << nframes << "..";
-        raw_img = input_capture.get_ir_image();
+        std::cout << nframes;
+        k4a::image raw_img = input_capture.get_ir_image();
+        k4a::image color_img = input_capture.get_color_image();
+        std::cout << (raw_img == nullptr ? "" : "R") << (color_img == nullptr ? "" : "C") << "..";
 
-        size_t output_size = deloader_depth_engine_get_output_frame_size(de_context_ptr);
-        std::vector<uint8_t> output_buf(output_size);
-        k4a_depth_engine_output_frame_info_t outputCaptureInfo = { 0 };
+        // create new capture with the color/imu/ab/depth
+        k4a::capture combined_cap = k4a::capture::create();
 
-        auto t0 = std::chrono::high_resolution_clock::now();
-        result =
-            deloader_depth_engine_process_frame(de_context_ptr,
-                                                raw_img.get_buffer(),
-                                                raw_img.get_size(),
-                                                k4a_depth_engine_output_type_t::K4A_DEPTH_ENGINE_OUTPUT_TYPE_Z_DEPTH,
-                                                output_buf.data(),
-                                                output_buf.size(),
-                                                &outputCaptureInfo,
-                                                nullptr);
-
-        auto t1 = std::chrono::high_resolution_clock::now();
-        process_time_ms += std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-
-        if (result == K4A_DEPTH_ENGINE_RESULT_SUCCEEDED)
+        if (input_config.color_track_enabled && color_img != nullptr)
         {
-            // create new capture with the color/imu/ab/depth
-            k4a::capture combined_cap = k4a::capture::create();
+            combined_cap.set_color_image(color_img);
+        }
+        if (raw_img != nullptr)
+        {
+            k4a_depth_engine_output_frame_info_t outputCaptureInfo = { 0 };
 
-            if (input_config.color_track_enabled)
+            auto t0 = std::chrono::high_resolution_clock::now();
+            result = deloader_depth_engine_process_frame(
+                de_context_ptr,
+                raw_img.get_buffer(),
+                raw_img.get_size(),
+                k4a_depth_engine_output_type_t::K4A_DEPTH_ENGINE_OUTPUT_TYPE_Z_DEPTH,
+                output_buf.data(),
+                output_buf.size(),
+                &outputCaptureInfo,
+                nullptr);
+
+            auto t1 = std::chrono::high_resolution_clock::now();
+            process_time_ms += std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+
+            if (result == K4A_DEPTH_ENGINE_RESULT_SUCCEEDED)
             {
-                combined_cap.set_color_image(input_capture.get_color_image());
-            }
-            int stride_bytes = (int)outputCaptureInfo.output_width * (int)sizeof(uint16_t);
-            std::chrono::microseconds us(K4A_90K_HZ_TICK_TO_USEC(outputCaptureInfo.center_of_exposure_in_ticks));
+                int stride_bytes = (int)outputCaptureInfo.output_width * (int)sizeof(uint16_t);
+                std::chrono::microseconds us(K4A_90K_HZ_TICK_TO_USEC(outputCaptureInfo.center_of_exposure_in_ticks));
 
-            if (input_config.depth_mode == K4A_DEPTH_MODE_PASSIVE_IR)
-            {
-                k4a::image ir_img = k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_IR16,
-                                                                   outputCaptureInfo.output_width,
-                                                                   outputCaptureInfo.output_height,
-                                                                   stride_bytes,
-                                                                   output_buf.data(),
-                                                                   (size_t)stride_bytes *
-                                                                       (size_t)outputCaptureInfo.output_height,
-                                                                   nullptr,
-                                                                   nullptr);
+                if (input_config.depth_mode == K4A_DEPTH_MODE_PASSIVE_IR)
+                {
+                    k4a::image ir_img = k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_IR16,
+                                                                       outputCaptureInfo.output_width,
+                                                                       outputCaptureInfo.output_height,
+                                                                       stride_bytes,
+                                                                       output_buf.data(),
+                                                                       (size_t)stride_bytes *
+                                                                           (size_t)outputCaptureInfo.output_height,
+                                                                       nullptr,
+                                                                       nullptr);
 
-                ir_img.set_timestamp(us);
-                combined_cap.set_ir_image(ir_img);
+                    ir_img.set_timestamp(us);
+                    combined_cap.set_ir_image(ir_img);
+                }
+                else
+                {
+                    k4a::image depth_img = k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_DEPTH16,
+                                                                          outputCaptureInfo.output_width,
+                                                                          outputCaptureInfo.output_height,
+                                                                          stride_bytes,
+                                                                          output_buf.data(),
+                                                                          (size_t)stride_bytes *
+                                                                              (size_t)outputCaptureInfo.output_height,
+                                                                          nullptr,
+                                                                          nullptr);
+
+                    k4a::image ir_img =
+                        k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_IR16,
+                                                       outputCaptureInfo.output_width,
+                                                       outputCaptureInfo.output_height,
+                                                       stride_bytes,
+                                                       output_buf.data() +
+                                                           stride_bytes * outputCaptureInfo.output_height,
+                                                       (size_t)stride_bytes * (size_t)outputCaptureInfo.output_height,
+                                                       nullptr,
+                                                       nullptr);
+
+                    depth_img.set_timestamp(us);
+                    ir_img.set_timestamp(us);
+
+                    combined_cap.set_depth_image(depth_img);
+                    combined_cap.set_ir_image(ir_img);
+                }
             }
             else
             {
-                k4a::image depth_img = k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_DEPTH16,
-                                                                      outputCaptureInfo.output_width,
-                                                                      outputCaptureInfo.output_height,
-                                                                      stride_bytes,
-                                                                      output_buf.data(),
-                                                                      (size_t)stride_bytes *
-                                                                          (size_t)outputCaptureInfo.output_height,
-                                                                      nullptr,
-                                                                      nullptr);
-
-                k4a::image ir_img =
-                    k4a::image::create_from_buffer(K4A_IMAGE_FORMAT_IR16,
-                                                   outputCaptureInfo.output_width,
-                                                   outputCaptureInfo.output_height,
-                                                   stride_bytes,
-                                                   output_buf.data() + stride_bytes * outputCaptureInfo.output_height,
-                                                   (size_t)stride_bytes * (size_t)outputCaptureInfo.output_height,
-                                                   nullptr,
-                                                   nullptr);
-
-                depth_img.set_timestamp(us);
-                ir_img.set_timestamp(us);
-
-                combined_cap.set_depth_image(depth_img);
-                combined_cap.set_ir_image(ir_img);
+                std::cout << "Depth Engine Processing error. Error code: " << result << std::endl;
+                return 1;
             }
-
-            recorder.write_capture(combined_cap);
         }
-        else
-        {
-            std::cout << "Depth Engine Processing error. Error code: " << result << std::endl;
-            return 1;
-        }
-
+        recorder.write_capture(combined_cap);
         nframes++;
     }
 
