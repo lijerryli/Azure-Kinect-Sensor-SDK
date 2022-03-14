@@ -176,14 +176,20 @@ int main(int argc, char **argv)
     std::vector<uint8_t> output_buf(output_size);
 
     // write the imu data
-    k4a_imu_sample_t imu;
-    while (input.get_next_imu_sample(&imu))
+    std::vector<k4a_imu_sample_t> imu_samples;
+
+    if (input_config.imu_track_enabled)
     {
-        recorder.write_imu_sample(imu);
+        k4a_imu_sample_t imu;
+        while (input.get_next_imu_sample(&imu))
+        {
+            imu_samples.push_back(imu);
+        }
     }
 
     // write the depth data
     int nframes = 0;
+    int imu_sample_idx = 0;
     uint64_t process_time_ms = 0;
     std::cout << "Depth Mode: " << input_config.depth_mode << std::endl;
     std::cout << "Processing Frame ";
@@ -196,11 +202,14 @@ int main(int argc, char **argv)
 
         // create new capture with the color/imu/ab/depth
         k4a::capture combined_cap = k4a::capture::create();
+        uint64_t capture_us = 0;
 
         if (input_config.color_track_enabled && color_img != nullptr)
         {
             combined_cap.set_color_image(color_img);
+            capture_us = color_img.get_device_timestamp().count();
         }
+
         if (raw_img != nullptr)
         {
             k4a_depth_engine_output_frame_info_t outputCaptureInfo = { 0 };
@@ -268,6 +277,8 @@ int main(int argc, char **argv)
                     combined_cap.set_depth_image(depth_img);
                     combined_cap.set_ir_image(ir_img);
                 }
+
+                capture_us = max(capture_us, static_cast<uint64_t>(us.count()));
             }
             else
             {
@@ -275,7 +286,15 @@ int main(int argc, char **argv)
                 return 1;
             }
         }
+
         recorder.write_capture(combined_cap);
+
+        while (imu_sample_idx < imu_samples.size() && imu_samples[imu_sample_idx].acc_timestamp_usec < capture_us)
+        {
+            recorder.write_imu_sample(imu_samples[imu_sample_idx]);
+            imu_sample_idx++;
+        }
+
         nframes++;
     }
 
