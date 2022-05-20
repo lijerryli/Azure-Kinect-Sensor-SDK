@@ -305,6 +305,13 @@ static k4a_result_t find_libusb_device(uint32_t device_index,
             if (K4A_SUCCEEDED(result))
             {
                 result = populate_container_id(usbcmd);
+
+                if (K4A_FAILED(result))
+                {
+                    LOG_INFO("Failed to find container ID, sleeping for 100ms and trying again", 0);
+                    ThreadAPI_Sleep(100);
+                    result = populate_container_id(usbcmd);
+                }
             }
 
             if (K4A_SUCCEEDED(result))
