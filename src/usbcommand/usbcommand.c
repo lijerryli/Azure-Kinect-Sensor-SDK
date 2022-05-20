@@ -153,6 +153,7 @@ static k4a_result_t populate_container_id(usbcmd_context_t *usbcmd)
     struct libusb_container_id_descriptor *container_id = NULL;
 
     result = K4A_RESULT_FROM_LIBUSB(libusb_get_bos_descriptor(usbcmd->libusb, &bos_desc));
+    LOG_INFO("libusb_get_bos_descriptor, result: %d", result);
 
     if (K4A_SUCCEEDED(result))
     {
@@ -162,6 +163,7 @@ static k4a_result_t populate_container_id(usbcmd_context_t *usbcmd)
             if (bos_desc->dev_capability[i]->bDevCapabilityType == LIBUSB_BT_CONTAINER_ID)
             {
                 result = K4A_RESULT_SUCCEEDED;
+                LOG_INFO("found index of container ID", 0);
                 break;
             }
         }
@@ -176,6 +178,8 @@ static k4a_result_t populate_container_id(usbcmd_context_t *usbcmd)
     {
         result = K4A_RESULT_FROM_LIBUSB(
             libusb_get_container_id_descriptor(NULL, bos_desc->dev_capability[i], &container_id));
+
+        LOG_INFO("libusb_get_container_id_descriptor, result: %d", result);
     }
 
     if (K4A_SUCCEEDED(result))
@@ -301,16 +305,21 @@ static k4a_result_t find_libusb_device(uint32_t device_index,
                     continue; // Device is already open
                 }
             }
+            LOG_INFO("libusb_get_device_descriptor, result: %d", result);
 
             if (K4A_SUCCEEDED(result))
             {
                 result = populate_container_id(usbcmd);
+                LOG_INFO("populate_container_id, result: %d", result);
 
                 if (K4A_FAILED(result))
                 {
-                    LOG_INFO("Failed to find container ID, sleeping for 100ms and trying again", 0);
-                    ThreadAPI_Sleep(100);
-                    result = populate_container_id(usbcmd);
+                    for (int i = 0; i < 100 && K4A_FAILED(result); ++i)
+                    {
+                        LOG_INFO("Failed to find container ID, sleeping for 100ms and trying again. Try %d", i);
+                        ThreadAPI_Sleep(100);
+                        result = populate_container_id(usbcmd);
+                    }
                 }
             }
 
